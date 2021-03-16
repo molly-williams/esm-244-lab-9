@@ -1,0 +1,292 @@
+---
+title: "MW 244 Lab 9"
+author: "Molly Williams"
+date: "3/7/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+0. Load packages and data
+
+```{r}
+
+library(beepr)
+library(datapasta)
+library(igraph)
+library(multiplex)
+library(ggraph)
+library(ggalluvial)
+library(readxl)
+library(praise)
+library(devtools)
+library(tidyverse)
+remotes::install_github("rstudio/gt")
+library(gt)
+
+lm_df <- read.gml("lesmis.gml")
+
+
+```
+
+#### 1. Network analysis using graph theory: Les Mis Character Connections
+
+```{r}
+
+les_mis <- graph_from_data_frame(lm_df, directed = FALSE)
+beep(sound = 5) # don't pipe or it's just stored as an audio object - good way to let you know your code is done!
+praise() # Can build this to be a template 
+
+```
+
+Find some quantitative metrics of graph and make initial plot:
+```{r}
+
+diameter(les_mis)
+farthest_vertices(les_mis)
+
+
+plot(les_mis,
+     vertex.color = "orange",
+     vertex.size = 5,
+     vertex.label.cex = 0.5)
+```
+Use ggraph to make it more ggplotty
+
+```{r}
+
+# Normal connection plot 
+ggraph(les_mis, layout = 'kk') +
+  geom_edge_link() +
+  geom_node_text(aes(label = name), size = 2, color = "white") +
+  theme_dark()
+
+
+# Or an arc graph: 
+ggraph(les_mis, layout = "linear") + 
+  geom_edge_arc(alpha = 0.8) + 
+  geom_node_text(aes(label = name), angle = 90, size = 2, hjust = 1) +
+  theme_graph()
+
+
+# Try layout = "circle", "tree"
+ggraph(les_mis, layout = "tree") +
+  geom_edge_fan(color = "red") + 
+  geom_node_text(aes(label = name), size = 2, color = "black", angle = 45) +
+  theme_void()
+
+
+# And a circular form of linear arcs (most used to seeing these):
+ggraph(les_mis, layout = "linear", circular = TRUE) +
+  geom_edge_arc(alpha = 0.5) +
+  geom_node_point(aes(colour = name), show.legend = FALSE) +
+  geom_node_text(aes(label = name), size = 3, hjust = "outward") +
+  theme_void()
+```
+
+#### 2. Sankey Diagrams
+
+Use alluvial and ggforce packages
+
+```{r}
+
+sdf <- read_csv("sankey_df.csv") # this is just a simple df
+
+ggplot(sdf, aes(y = weight, axis1 = before, axis2 = after)) +
+  geom_alluvium(aes(fill = before, color = before), show.legend = FALSE, width = 1/5) +
+  geom_stratum(width = 1/5, color = "gray") +
+  geom_text(stat = "stratum", label.strata = TRUE) +
+  scale_fill_manual(values = c("purple","blue","green")) +
+  scale_color_manual(values = c("purple","blue","green")) +
+  scale_x_discrete(limits = c("Before", "After"), expand = c(0,0)) +
+  theme_minimal()
+
+
+```
+
+#### 3. Creating your own tibbles
+## Tibble: usually used interchangeably with data frames, just has a little more functionality
+
+```{r}
+
+my_tibble <- tribble(
+  ~allison, ~made, ~this, ~table,
+  1,"yes",0,10000,
+  2,"no",10, 20000,
+  3,"maybe",20, 5000,
+  4,"yes",15, 12000,
+  5,"no",25, 18000
+)
+
+# Then it just works like anything else...
+ggplot(my_tibble, aes(x = allison, y = table)) +
+  geom_point(aes(color = made), size = 10) +
+  scale_color_manual(values = c("red","orange","yellow")) +
+  theme_dark()
+
+
+```
+
+Check out Jenny Bryan's awesome package 'reprex'
+
+#### 3b: datapasta
+### Can I copy and paste data from outside sources and have R store it as a data frame? 
+[How to datapasta](https://cran.r-project.org/web/packages/datapasta/vignettes/how-to-datapasta.html)
+```{r}
+
+# Copy table in html (or otherwise), go to tools > addins > browse addins > datapasta::paste as tribble
+
+weather_data <- tibble::tribble(
+                                     ~Condition,          ~Location, ~Min, ~Max,
+                               "Partly cloudy.",         "Brisbane",   19,   29,
+                               "Partly cloudy.", "Brisbane Airport",   18,   27,
+                             "Possible shower.",       "Beaudesert",   15,   30,
+                               "Partly cloudy.",        "Chermside",   17,   29,
+               "Shower or two. Possible storm.",           "Gatton",   15,   32,
+                             "Possible shower.",          "Ipswich",   15,   30,
+                               "Partly cloudy.",    "Logan Central",   18,   29,
+                                "Mostly sunny.",            "Manly",   20,   26,
+                               "Partly cloudy.",    "Mount Gravatt",   17,   28,
+                             "Possible shower.",            "Oxley",   17,   30,
+                               "Partly cloudy.",        "Redcliffe",   19,   27
+               )
+
+
+
+#... but, not reproducible for a collaboratie workflow . If data/ site could be updated , keep track of everything with metadata
+
+
+```
+
+
+#### 3c: Beautiful customized tables with gt 
+
+```{r}
+
+weather_data  %>%
+  gt()
+
+# BETTER:
+
+weather_data %>% 
+  gt() %>% 
+  tab_header(
+    title = "An amazing title", # Add a title
+    subtitle = "(by Allison!)"# And a subtitle
+  ) %>%
+  fmt_passthrough( # Not sure about this but it works...
+    columns = vars(Location) # First column: supp (character)
+  ) %>% 
+  fmt_number(
+    columns = vars(Min), # Second column: mean_len (numeric)
+    decimals = 1 # With 4 decimal places
+  ) %>% 
+    fmt_number(
+    columns = vars(Max), # Third column: dose (numeric)
+    decimals = 1 # With 2 decimal places
+  ) %>% 
+  cols_move_to_start(
+    columns = vars(Location)
+  ) %>% 
+  data_color( # Update cell colors...
+    columns = vars(Min), # ...for mean_len column
+    colors = scales::col_numeric(
+      palette = c(
+        "darkblue", "blue"), # Overboard colors! 
+      domain = c(20,14) # Column scale endpoints
+  )
+  ) %>% 
+  data_color(
+    columns = vars(Max),
+    colors = scales::col_numeric(
+      palette = c(
+       "yellow", "orange", "red"),
+      domain = c(26,32)
+      )
+    ) %>% 
+  tab_options(
+    table.background.color = "purple",
+    heading.background.color = "black",
+    column_labels.background.color = "gray",
+    heading.border.bottom.color = "yellow",
+    column_labels.font.size = 10
+  )
+
+```
+
+
+#### 3d: Reading directly from a URL
+
+```{r}
+
+nuclear <- read_delim("https://www.nrc.gov/reading-rm/doc-collections/event-status/reactor-status/PowerReactorStatusForLast365Days.txt", delim = "|", col_names = TRUE)
+
+# Open and you'll see that it's parsed! Can then write to a csv or text file (always want a version of what you were working with)
+
+write_csv(nuclear, "nuclear.csv")
+
+```
+
+
+###3e. Reading in Excel files (and skipping top rows metadata)
+
+Easy to read in Excel files (respecting the classes):
+```{r}
+
+pesticides <- read_xls("PesticideResidues.xls")
+
+# Dang, there are two extra rows with information in them. Bummer. But: 
+
+pest2 <- read_xls("PesticideResidues.xls", skip = 2, col_names = TRUE) # Ta da! 
+
+pest <- pest2 %>% 
+  janitor::clean_names()
+
+```
+
+
+
+Let's clean that up, do some wrangling, and a cool visualization to close out 244 lab for the year
+
+Some wrangling of the pesticide data: 
+
+```{r}
+
+library(stringr)
+crops <- pest %>% 
+  filter(commodity == "KALE",!is.na(pest$grower_city)) %>%
+  separate(pest$grower_city, c("grow_city","grow_state"), sep = ",") %>% 
+  separate(collection_site_city, c("market_city","market_state"), sep = ",") %>% 
+  group_by(organic_commodity, grow_city, market_city) %>% 
+  tally()
+
+
+```
+
+Then a Sankey diagram! 
+```{r}
+
+ggplot(crops, aes(y = n, axis1 = organic_commodity, axis2 = grow_city, axis3 = market_city)) +
+  geom_alluvium(aes(fill = organic_commodity, color = organic_commodity), show.legend = FALSE, width = 1/5) +
+  geom_stratum(width = 1/5, color = "gray") +
+  geom_text(stat = "stratum", label.strata = TRUE, size = 2) +
+  scale_fill_manual(values = c("purple","blue")) +
+  scale_color_manual(values = c("purple","blue")) +
+  scale_x_discrete(limits = c("status", "grown","market"), expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_bw()
+
+```
+
+
+
+
+
+
+
+
+
+
